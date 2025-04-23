@@ -1,78 +1,278 @@
-import tkinter as tk
-from tkinter import simpledialog, messagebox
+// 2witter - Robust, Modular, and Commented Version
+// A secure, maintainable Twitter-style social media app in React
 
-# A very basic social media app using tkinter.
-# Modeled after a simple version of 2018-era Twitter: users can sign up, log in, and post.
+import React, { useState } from "react";
+import { Card, CardContent } from "@/components/ui/card";
+import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
+import { Textarea } from "@/components/ui/textarea";
+import { ScrollArea } from "@/components/ui/scroll-area";
+import { motion } from "framer-motion";
 
-class SocialApp:
-    def __init__(self, root):
-        self.root = root
-        self.root.title("Mini Social Media App")
-        self.users = {}  # Dictionary to store user accounts: {username: password}
-        self.posts = []  # List to store posts in format (username, post_text)
-        self.current_user = None  # Track who is currently logged in
-        self.build_login_screen()
+// Default avatar for users who do not provide one
+const DEFAULT_PIC = "https://placekitten.com/100/100";
 
-    def build_login_screen(self):
-        # Clear the window for a fresh screen
-        for widget in self.root.winfo_children():
-            widget.destroy()
+export default function SocialApp() {
+  // All registered users stored as { username: { password, picture, bio } }
+  const [users, setUsers] = useState({});
 
-        tk.Label(self.root, text="Welcome to the Mini Social App", font=("Arial", 16)).pack(pady=10)
+  // Logged-in user state
+  const [user, setUser] = useState(null);
 
-        tk.Button(self.root, text="Log In", width=20, command=self.login).pack(pady=5)
-        tk.Button(self.root, text="Sign Up", width=20, command=self.sign_up).pack(pady=5)
+  // Toggle between login and signup mode
+  const [isSignup, setIsSignup] = useState(false);
 
-    def sign_up(self):
-        username = simpledialog.askstring("Sign Up", "Choose a username:")
-        if username in self.users:
-            messagebox.showerror("Error", "Username already exists.")
-            return
-        password = simpledialog.askstring("Sign Up", "Choose a password:", show='*')
-        self.users[username] = password
-        messagebox.showinfo("Success", "Account created. You can now log in.")
+  // Form state for login/signup fields
+  const [form, setForm] = useState({ username: "", password: "", bio: "", picture: "" });
 
-    def login(self):
-        username = simpledialog.askstring("Login", "Username:")
-        password = simpledialog.askstring("Login", "Password:", show='*')
-        if self.users.get(username) == password:
-            self.current_user = username
-            self.build_feed()
-        else:
-            messagebox.showerror("Login Failed", "Invalid username or password.")
+  // Post management states
+  const [posts, setPosts] = useState([]); // All posts in the feed
+  const [newPost, setNewPost] = useState(""); // Text content for a new post
+  const [filter, setFilter] = useState("newest"); // Feed sorting preference
 
-    def build_feed(self):
-        for widget in self.root.winfo_children():
-            widget.destroy()
+  // Handles both signup and login logic
+  const handleAuth = () => {
+    const { username, password, bio, picture } = form;
 
-        tk.Label(self.root, text=f"Logged in as: {self.current_user}", font=("Arial", 12)).pack(pady=5)
-        tk.Button(self.root, text="New Post", command=self.new_post).pack(pady=5)
-        tk.Button(self.root, text="Log Out", command=self.logout).pack(pady=5)
+    if (!username.trim() || !password.trim()) {
+      alert("Both username and password are required.");
+      return;
+    }
 
-        self.feed_box = tk.Text(self.root, height=15, width=50)
-        self.feed_box.pack(pady=10)
-        self.feed_box.insert(tk.END, self.format_posts())
-        self.feed_box.config(state=tk.DISABLED)
+    if (isSignup) {
+      // Prevent duplicate usernames
+      if (users.hasOwnProperty(username)) {
+        alert("Username already exists. Choose another.");
+        return;
+      }
 
-    def new_post(self):
-        post_text = simpledialog.askstring("New Post", "What's happening?")
-        if post_text:
-            self.posts.append((self.current_user, post_text))
-            self.feed_box.config(state=tk.NORMAL)
-            self.feed_box.delete(1.0, tk.END)
-            self.feed_box.insert(tk.END, self.format_posts())
-            self.feed_box.config(state=tk.DISABLED)
+      // Add new user to state
+      setUsers(prev => ({
+        ...prev,
+        [username]: {
+          password,
+          bio: bio.trim(),
+          picture: picture.trim() || DEFAULT_PIC
+        }
+      }));
 
-    def logout(self):
-        self.current_user = None
-        self.build_login_screen()
+      alert("Signup successful!");
+      setIsSignup(false);
+      setForm({ username: "", password: "", bio: "", picture: "" });
+    } else {
+      // Login validation
+      const existingUser = users[username];
+      if (!existingUser || existingUser.password !== password) {
+        alert("Invalid username or password.");
+        return;
+      }
 
-    def format_posts(self):
-        # Format the post feed from newest to oldest
-        formatted = "\n".join([f"@{user}: {text}" for user, text in reversed(self.posts)])
-        return formatted or "No posts yet."
+      // Login success
+      setUser({ username, ...existingUser });
+    }
+  };
 
-if __name__ == "__main__":
-    root = tk.Tk()
-    app = SocialApp(root)
-    root.mainloop()
+  // Clears user session
+  const handleLogout = () => setUser(null);
+
+  // Posts a new entry to the feed
+  const handlePost = (image = null) => {
+    if (!newPost.trim() && !image) return;
+
+    const post = {
+      id: crypto.randomUUID(), // Unique ID for this post
+      user: user.username, // Username of the poster
+      text: newPost.trim(), // Text content
+      timestamp: new Date(), // Timestamp for sorting
+      likes: 0, // Initial like count
+      replies: [], // Array of reply objects
+      image: image || null // Optional image
+    };
+
+    setPosts(prev => [post, ...prev]);
+    setNewPost(""); // Clear post input
+  };
+
+  // Increments the like count of a post
+  const handleLike = id => {
+    setPosts(prev => prev.map(post =>
+      post.id === id ? { ...post, likes: post.likes + 1 } : post
+    ));
+  };
+
+  // Adds a reply to a post
+  const handleReply = id => {
+    const replyText = prompt("Your reply:");
+    if (!replyText?.trim()) return;
+
+    setPosts(prev => prev.map(post =>
+      post.id === id
+        ? { ...post, replies: [...post.replies, { user: user.username, text: replyText.trim() }] }
+        : post
+    ));
+  };
+
+  // Sort posts based on selected filter
+  const sortedPosts = [...posts].sort((a, b) =>
+    filter === "newest"
+      ? b.timestamp - a.timestamp
+      : b.likes - a.likes
+  );
+
+  // --- AUTH UI RENDER ---
+  if (!user) {
+    return (
+      <div className="flex flex-col items-center justify-center min-h-screen bg-gray-100">
+        <motion.div
+          initial={{ opacity: 0 }}
+          animate={{ opacity: 1 }}
+          className="bg-white p-6 rounded-xl shadow-lg w-full max-w-sm"
+        >
+          <h1 className="text-2xl font-bold mb-4 text-center">{isSignup ? "Sign Up" : "Log In"}</h1>
+
+          {/* Username input */}
+          <Input
+            placeholder="Username"
+            value={form.username}
+            onChange={e => setForm({ ...form, username: e.target.value })}
+            className="mb-3"
+          />
+
+          {/* Password input */}
+          <Input
+            type="password"
+            placeholder="Password"
+            value={form.password}
+            onChange={e => setForm({ ...form, password: e.target.value })}
+            className="mb-3"
+          />
+
+          {/* Extra inputs for signup mode */}
+          {isSignup && (
+            <>
+              <Input
+                placeholder="Profile Picture URL (optional)"
+                value={form.picture}
+                onChange={e => setForm({ ...form, picture: e.target.value })}
+                className="mb-3"
+              />
+              <Textarea
+                placeholder="Bio"
+                value={form.bio}
+                onChange={e => setForm({ ...form, bio: e.target.value })}
+                className="mb-3"
+              />
+            </>
+          )}
+
+          {/* Submit button */}
+          <Button className="w-full mb-2" onClick={handleAuth}>
+            {isSignup ? "Sign Up" : "Log In"}
+          </Button>
+
+          {/* Toggle between login and signup */}
+          <Button variant="ghost" className="w-full" onClick={() => setIsSignup(!isSignup)}>
+            {isSignup ? "Have an account? Log in" : "New? Sign up here"}
+          </Button>
+        </motion.div>
+      </div>
+    );
+  }
+
+  // --- MAIN UI RENDER ---
+  return (
+    <div className="flex min-h-screen bg-gray-50">
+      {/* Sidebar with profile and settings */}
+      <aside className="w-64 p-4 border-r border-gray-300">
+        <div className="text-lg font-bold mb-4">@{user.username}</div>
+        <img src={user.picture} alt="Profile" className="w-24 h-24 rounded-full mb-2" />
+        <p className="text-sm text-gray-600 mb-4">{user.bio}</p>
+
+        {/* Logout button */}
+        <Button onClick={handleLogout} variant="destructive" className="w-full">
+          Log Out
+        </Button>
+
+        {/* Feed sorting */}
+        <hr className="my-4" />
+        <h4 className="text-sm font-medium mb-2">Sort feed by:</h4>
+        <Button variant={filter === "newest" ? "default" : "ghost"} onClick={() => setFilter("newest")} className="w-full mb-1">
+          Newest
+        </Button>
+        <Button variant={filter === "popular" ? "default" : "ghost"} onClick={() => setFilter("popular")} className="w-full">
+          Most Liked
+        </Button>
+      </aside>
+
+      {/* Main feed content */}
+      <main className="flex-1 p-6">
+        {/* Post composer */}
+        <Card className="mb-4">
+          <CardContent className="p-4">
+            <Textarea
+              placeholder="What's happening?"
+              value={newPost}
+              onChange={e => setNewPost(e.target.value)}
+              className="mb-3"
+            />
+            <div className="flex gap-3">
+              <Button onClick={() => handlePost()}>Post</Button>
+              <Button
+                variant="ghost"
+                onClick={() => {
+                  const url = prompt("Enter image or gif URL:");
+                  if (url?.trim()) handlePost(url.trim());
+                }}
+              >📷 Add Image/GIF</Button>
+            </div>
+          </CardContent>
+        </Card>
+
+        {/* Post feed */}
+        <ScrollArea className="h-[600px] rounded-xl border bg-white">
+          <div className="p-4 space-y-4">
+            {sortedPosts.length === 0 ? (
+              <p className="text-gray-500 text-center">No posts yet.</p>
+            ) : (
+              sortedPosts.map(post => (
+                <Card key={post.id} className="shadow-md">
+                  <CardContent className="p-4">
+                    {/* Post header */}
+                    <div className="flex items-center gap-3">
+                      <img src={users[post.user]?.picture || DEFAULT_PIC} className="w-10 h-10 rounded-full" alt="avatar" />
+                      <div>
+                        <p className="font-semibold">@{post.user}</p>
+                        <p className="text-sm text-gray-500">{post.timestamp.toLocaleString()}</p>
+                      </div>
+                    </div>
+
+                    {/* Post content */}
+                    <p className="mt-2">{post.text}</p>
+                    {post.image && (
+                      <img src={post.image} alt="post attachment" className="mt-2 max-h-60 rounded-lg" />
+                    )}
+
+                    {/* Post actions */}
+                    <div className="flex gap-3 mt-3">
+                      <Button size="sm" variant="ghost" onClick={() => handleLike(post.id)}>❤️ {post.likes}</Button>
+                      <Button size="sm" variant="ghost" onClick={() => handleReply(post.id)}>💬 {post.replies.length}</Button>
+                    </div>
+
+                    {/* Post replies */}
+                    {post.replies.length > 0 && (
+                      <div className="mt-3 ml-4 border-l pl-4">
+                        {post.replies.map((r, i) => (
+                          <p key={i}><strong>@{r.user}</strong>: {r.text}</p>
+                        ))}
+                      </div>
+                    )}
+                  </CardContent>
+                </Card>
+              ))
+            )}
+          </div>
+        </ScrollArea>
+      </main>
+    </div>
+  );
+}
